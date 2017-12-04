@@ -24,6 +24,7 @@
     "webpack-dev-server": "^2.9.5"
   },
   "dependencies": {
+    "es6-3d-primitives": "file:../es6-3d-primitives/",
     "sylvester-es6": "^0.0.2"
   }
 }

@@ -1,33 +1,66 @@
 "use strict";
-
-import {Vector} from 'sylvester-es6';
-
 require('./styles/styles.scss');
-const slv = require('sylvester-es6');
 
-let rootElement = document.getElementById('root');
+import {Vector, Sphere, Plane, Point, Normal, Ray} from 'es6-3d-primitives';
 
-class Point {
-    constructor(x, y, z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
+function raytrace(scene, width, height, set_pixel_func) {
+    const shiftX = width / 2;
+    const shiftY = height / 2;
+
+    for (let x = 0; x <= width; x++) {
+        for (let y = 0; y <= height; y += 1) {
+            const ray = new Ray(new Point(x - shiftX, y - shiftY, 0), new Vector(0, 0, -1));
+            for (const obj of scene) {
+                if (obj.hit(ray)) {
+                    //console.log(`Tracing ${x}x${y}, ray ${ray}: hit`);
+                    set_pixel_func(x, y, 255, 255, 255, 0);
+                } else {
+                    //console.log(`Tracing ${x}x${y}, ray ${ray}: miss`);
+                    set_pixel_func(x, y, 0, 0, 0, 0);
+                }
+            }
+        }
     }
 }
 
-class Plane {
-    constructor(point, normal) {
-        this.point = point;
-        this.normal = normal;
+
+function render(canvas) {
+    const scene = [
+        new Sphere(new Point(0, 0, 100), 30),
+    ];
+
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+
+    console.log(`Rendering to canvas ${canvasWidth}x${canvasHeight}`);
+
+    var ctx = canvas.getContext('2d');
+    var canvasData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+
+    function drawPixel (x, y, r, g, b, a) {
+        var index = (x + y * canvasWidth) * 4;
+
+        canvasData.data[index + 0] = r;
+        canvasData.data[index + 1] = g;
+        canvasData.data[index + 2] = b;
+        canvasData.data[index + 3] = a;
     }
+
+    function updateCanvas() {
+        ctx.putImageData(canvasData, 0, 0);
+    }
+
+    raytrace(scene, canvasWidth, canvasHeight, function(x, y, r, g, b) {
+        drawPixel(x, y, r, g, b, 255);
+    });
+    updateCanvas();
 }
 
-class Ray {
-    constructor(origin, direction) {
-        this.origin = origin;
-        this.direction = direction;
-    }
+function main() {
+    var canvas = document.getElementById('canvas');
+    render(canvas);
 }
+
 
 function testCanvas() {
     var canvas = document.getElementById('canvas');
@@ -56,6 +89,6 @@ function testCanvas() {
 }
 
 document.addEventListener("DOMContentLoaded",function(){
-    testCanvas();
+    main();
 });
 
