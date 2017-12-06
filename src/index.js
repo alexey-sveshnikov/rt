@@ -1,24 +1,71 @@
 "use strict";
 require('./styles/styles.scss');
 
-import {Vector, Sphere, Plane, Point, Normal, Ray} from 'es6-3d-primitives';
+import {Vector, Sphere, Plane, Point, Normal, Ray, Color} from 'es6-3d-primitives';
+
+class CheckerBoard {
+    constructor(point, normal, color) {
+        this.point = point;
+        this.normal = normal;
+        this.color = color;
+    }
+    hit(ray) {
+        const t = this.normal.dot(this.point.sub(ray.origin)) / ray.vector.dot(this.normal);
+
+        const v = ray.vector.normalize().mul(t);
+
+        const point = ray.origin.add(v);
+
+        if (! isFinite(t) || t < 0) {
+            return false;
+        }
+
+        if ((Math.ceil(point.x / 10) % 2 == 0) ^ (Math.ceil(point.z / 10) % 2 == 0)) {
+           return false;
+        }
+        return true;
+    }
+}
 
 function raytrace(scene, width, height, set_pixel_func) {
-    const shiftX = width / 2;
-    const shiftY = height / 2;
+    const pixel_size = 1;
+    const shiftX = width / 2 + 0.5;
+    const shiftY = height / 2 + 0.5;
 
-    for (let x = 0; x <= width; x++) {
-        for (let y = 0; y <= height; y += 1) {
-            const ray = new Ray(new Point(x - shiftX, y - shiftY, 0), new Vector(0, 0, -1));
+    const black = new Color(0, 0, 0);
+
+    const cameraPosition = new Point(0, 50, 100);
+
+    const viewField = Math.PI / 2;
+
+    for (let y = 0; y <= height; y += 1) {
+        for (let x = 0; x <= width; x++) {
+            const dx = 1.0 * x / width - 0.5;
+            const dy = 1.0 * y / height - 0.5;
+
+            const ray = new Ray(
+                cameraPosition,
+                new Vector(
+                    dx * viewField,
+                    dy * viewField,
+                    -1
+                )
+            );
+            //console.log(`dy: ${dy}. ray to ${ray} (y: ${ray.vector.y})`);
+            let color;
             for (const obj of scene) {
                 if (obj.hit(ray)) {
                     //console.log(`Tracing ${x}x${y}, ray ${ray}: hit`);
-                    set_pixel_func(x, y, 255, 255, 255, 0);
+                    color = obj.color;
+                    break;
                 } else {
-                    //console.log(`Tracing ${x}x${y}, ray ${ray}: miss`);
-                    set_pixel_func(x, y, 0, 0, 0, 0);
+                    color = black;
+                    //console.log(`Tracing ${x}x${y}. dx: ${dx}, dy: ${dy},  ray ${ray}: miss`);
+                    //set_pixel_func(x, y, black);
                 }
             }
+            //console.log(`Tracing ${x}x${y}. dx: ${dx}, dy: ${dy}, ray ${ray}. Color: ${color}`);
+            set_pixel_func(x, y, color);
         }
     }
 }
@@ -26,7 +73,8 @@ function raytrace(scene, width, height, set_pixel_func) {
 
 function render(canvas) {
     const scene = [
-        new Sphere(new Point(0, 0, 100), 30),
+        new Sphere(new Point(0, 10, -50), 30, new Color(1, 1, 0)),
+        new CheckerBoard(new Point(0, 0, 0), new Normal(0, 1, 0), new Color(1, 1, 1)),
     ];
 
     const canvasWidth = canvas.width;
@@ -50,8 +98,9 @@ function render(canvas) {
         ctx.putImageData(canvasData, 0, 0);
     }
 
-    raytrace(scene, canvasWidth, canvasHeight, function(x, y, r, g, b) {
-        drawPixel(x, y, r, g, b, 255);
+    raytrace(scene, canvasWidth, canvasHeight, function(x, y, color) {
+        //console.log(`Drawing at ${x} x ${y} : ${color.r * 255}, ${color.g * 255}, ${color.b * 255}`)
+        drawPixel(x, canvasHeight - y, color.r * 255, color.g * 255, color.b * 255, 255);
     });
     updateCanvas();
 }
@@ -61,34 +110,7 @@ function main() {
     render(canvas);
 }
 
-
-function testCanvas() {
-    var canvas = document.getElementById('canvas');
-    var ctx = canvas.getContext('2d');
-    var canvasData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    var canvasWidth = canvas.width;
-    // That's how you define the value of a pixel //
-    function drawPixel (x, y, r, g, b, a) {
-        var index = (x + y * canvasWidth) * 4;
-
-        canvasData.data[index + 0] = r;
-        canvasData.data[index + 1] = g;
-        canvasData.data[index + 2] = b;
-        canvasData.data[index + 3] = a;
-    }
-
-    // That's how you update the canvas, so that your //
-    // modification are taken in consideration //
-    function updateCanvas() {
-        ctx.putImageData(canvasData, 0, 0);
-    }
-    drawPixel(1, 1, 255, 0, 0, 255);
-    drawPixel(1, 2, 255, 0, 0, 255);
-    drawPixel(1, 3, 255, 0, 0, 255);
-    updateCanvas();
-}
-
-document.addEventListener("DOMContentLoaded",function(){
+document.addEventListener("DOMContentLoaded", function(){
     main();
 });
 
