@@ -37,6 +37,7 @@ function raytrace(scene, width, height, set_pixel_func) {
     const cameraPosition = new Point(0, 50, 100);
 
     const viewField = Math.PI / 2;
+    const aspectRatio = width / height;
 
     for (let y = 0; y <= height; y += 1) {
         for (let x = 0; x <= width; x++) {
@@ -46,7 +47,7 @@ function raytrace(scene, width, height, set_pixel_func) {
             const ray = new Ray(
                 cameraPosition,
                 new Vector(
-                    dx * viewField,
+                    dx * viewField * aspectRatio,
                     dy * viewField,
                     -1
                 )
