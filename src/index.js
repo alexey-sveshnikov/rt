@@ -23,60 +23,89 @@ class CheckerBoard {
         if ((Math.ceil(point.x / 10) % 2 == 0) ^ (Math.ceil(point.z / 10) % 2 == 0)) {
            return false;
         }
-        return true;
+        return t;
     }
 }
 
 function raytrace(scene, width, height, set_pixel_func) {
-    const pixel_size = 1;
     const shiftX = width / 2 + 0.5;
     const shiftY = height / 2 + 0.5;
 
-    const black = new Color(0, 0, 0);
+    const background = new Color(0.1, 0.1, 0.15);
 
-    const cameraPosition = new Point(0, 50, 100);
+    const cameraPosition = new Point(0.001, 50.001, 400.001);
 
-    const viewField = Math.PI / 2;
+    const pixel_size = 0.4;
     const aspectRatio = width / height;
 
     for (let y = 0; y <= height; y += 1) {
         for (let x = 0; x <= width; x++) {
-            const dx = 1.0 * x / width - 0.5;
-            const dy = 1.0 * y / height - 0.5;
 
-            const ray = new Ray(
-                cameraPosition,
-                new Vector(
-                    dx * viewField * aspectRatio,
-                    dy * viewField,
-                    -1
-                )
+            const viewPanePoint = new Point(
+                (x - shiftX) * pixel_size,
+                (y - shiftY) * pixel_size,
+                -300
             );
-            //console.log(`dy: ${dy}. ray to ${ray} (y: ${ray.vector.y})`);
-            let color;
-            for (const obj of scene) {
-                if (obj.hit(ray)) {
-                    //console.log(`Tracing ${x}x${y}, ray ${ray}: hit`);
-                    color = obj.color;
-                    break;
-                } else {
-                    color = black;
-                    //console.log(`Tracing ${x}x${y}. dx: ${dx}, dy: ${dy},  ray ${ray}: miss`);
-                    //set_pixel_func(x, y, black);
+            const dir = viewPanePoint.sub(cameraPosition).normalize();
+
+            let samples = [];
+            const sample_count = 25;
+            for (let n = 0; n < sample_count; n += 1) {
+                const ray = new Ray(
+                    new Point(
+                        cameraPosition.x + Math.random() * 0.15,
+                        cameraPosition.y + Math.random() * 0.15,
+                        cameraPosition.z + Math.random() * 0.2
+                    ),
+                    dir
+                );
+                //console.log(`dy: ${dy}. ray to ${ray} (y: ${ray.vector.y})`);
+                let nearest_object_color = background;
+                let nearest_object_distance = Infinity;
+                for (const obj of scene) {
+                    const distance = obj.hit(ray);
+                    if (distance != false && distance < nearest_object_distance) {
+                        nearest_object_distance = distance;
+                        nearest_object_color = obj.color;
+                    }
                 }
+                samples.push(nearest_object_color);
             }
+            let result = new Color(0, 0, 0);
+            for (let color of samples) {
+                result = result.add(color);
+            }
+            result = result.mul(1/sample_count);
             //console.log(`Tracing ${x}x${y}. dx: ${dx}, dy: ${dy}, ray ${ray}. Color: ${color}`);
-            set_pixel_func(x, y, color);
+            set_pixel_func(x, y, result);
         }
     }
 }
 
-
 function render(canvas) {
     const scene = [
-        new Sphere(new Point(0, 10, -50), 30, new Color(1, 1, 0)),
-        new CheckerBoard(new Point(0, 0, 0), new Normal(0, 1, 0), new Color(1, 1, 1)),
+        new Sphere(new Point(0, 50, 400), 1000, new Color(0.1, 0.1, 0.15)),
     ];
+
+
+    const rate = 20;
+    for (let i = 0.1; i < 5.2; i += 0.17) {
+        const x = i * rate * Math.cos(Math.PI * i);
+        const y = i * rate * Math.sin(Math.PI * i);
+
+        console.log(`New sphere at ${x}, ${y}`);
+        scene.push(
+            new Sphere(new Point(x, y + 70, 15), i, new Color(1, 0, 0))
+        )
+    }
+
+    // scene.push(
+    //     new Sphere(new Point(0, 30, 0), 30, new Color(1, 1, 0))
+    // );
+    scene.push(
+        new CheckerBoard(new Point(0, 0, 0), new Normal(0, 1, 0), new Color(1, 1, 1))
+    );
+
 
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
