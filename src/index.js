@@ -12,7 +12,10 @@ class Light {
 }
 
 
-function *primeRays(width, height, viewPaneDistance, pixelSize, cameraPosition) {
+function *primeRays(width, height, scene) {
+    const viewPaneSegment = 2 * scene.viewPaneDistance * Math.tan(scene.cameraAngle);
+    const pixelSize = viewPaneSegment / width;
+
     const shiftX = width / 2 + 0.5;
     const shiftY = height / 2 + 0.5;
 
@@ -21,18 +24,18 @@ function *primeRays(width, height, viewPaneDistance, pixelSize, cameraPosition) 
             const viewPanePoint = new Point(
                 (x - shiftX) * pixelSize,
                 (y - shiftY) * pixelSize,
-                -viewPaneDistance
+                -scene.viewPaneDistance
             );
-            const direction = viewPanePoint.sub(cameraPosition).normalize();
+            const direction = viewPanePoint.sub(scene.cameraPosition).normalize();
 
             yield {
                 displayX: x,
                 displayY: y,
                 ray: new Ray(
                     new Point(
-                        cameraPosition.x, // + Math.random() * 0.05,
-                        cameraPosition.y, // + Math.random() * 0.05,
-                        cameraPosition.z, // + Math.random() * 0.01
+                        scene.cameraPosition.x, // + Math.random() * 0.05,
+                        scene.cameraPosition.y, // + Math.random() * 0.05,
+                        scene.cameraPosition.z, // + Math.random() * 0.01
                     ),
                     direction
                 )
@@ -42,49 +45,65 @@ function *primeRays(width, height, viewPaneDistance, pixelSize, cameraPosition) 
 }
 
 function rayTrace(ray, scene) {
-    let nearest_object_distance = Infinity;
+    let nearest_hit;
     let nearest_object;
-    for (const obj of scene.objects) {
-        const distance = obj.hit(ray);
-        if (distance !== false && distance < nearest_object_distance) {
-            nearest_object_distance = distance;
-            nearest_object = obj;
-        }
-    }
+    let nearest_object_distance = Infinity;
 
-    if (nearest_object_distance > scene.horizonDistance) {
-        return {
-            distance: Infinity,
-            color: scene.backgroundColor,
+    for (const obj of scene.objects) {
+        const result = obj.hit(ray);
+        if (result !== undefined) {
+            if (result.distance < nearest_object_distance) {
+                nearest_object = obj;
+                nearest_hit = result;
+            }
         }
     }
 
     if (nearest_object !== undefined) {
-        const hit_point = ray.origin.add(ray.vector.normalize().mul(nearest_object_distance - 0.001));
+        // console.log('We\'ve got a hit!', nearest_hit);
+        if (nearest_hit.distance > scene.horizonDistance) {
+            return {
+                distance: Infinity,
+                color: scene.backgroundColor,
+            }
+        }
+
         // console.log(`We hit an object ${nearest_object} at distance ${nearest_object_distance}, hit point ${hit_point}`);
 
         let color = nearest_object.color;
 
         for (const light of scene.lights) {
-            const direction = light.origin.sub(hit_point);
-            const ray = new Ray(hit_point, direction.normalize());
-            const light_distance = light.origin.distance(hit_point);
+            const direction = light.origin.sub(nearest_hit.hit_point);
+            const ray = new Ray(nearest_hit.hit_point, direction.normalize());
+            const light_distance = light.origin.distance(nearest_hit.hit_point);
+
+            // console.log('Emitting ray', ray);
 
             let visible = true;
 
             for (const obj of scene.objects) {
                 // console.log(`Tracing secondary ray ${ray}`);
-                const d = obj.hit(ray);
-                if (d !== false && d < light_distance) {
-                    visible = false;
-                    break;
+                const result = obj.hit(ray);
+                if (result !== undefined) {
+                    // console.log('Light ray was stopped!', result);
+                    const d = result.distance;
+                    if (d < light_distance) {
+                        visible = false;
+                        break;
+                    }
                 }
             }
 
             if (visible) {
+                // console.count('Light is visible!');
                 // console.log(`adding color: ${color} + ${light.color}`);
-                color = color.add(light.color);
+                const lambert_coeff = nearest_hit.normal.dot(ray.vector) * 0.05;
+                const new_color = light.color.mul(lambert_coeff);
+                // console.log(`Hit point normal: ${nearest_hit.normal}, lambert coeff: ${lambert_coeff}; color: ${light.color} -> ${new_color}`);
+                color = color.add(new_color);
                 // console.log(`result: ${color}`);
+            } else {
+                // console.count('Light is NOT visible!');
             }
         }
         return {
@@ -102,9 +121,8 @@ function rayTrace(ray, scene) {
 
 function render(scene, width, height, primeRaysGen, setPixelFunc) {
 
-    const pixelSize = 0.4;
 
-    for (const {displayX, displayY, ray} of primeRaysGen(width, height, scene.viewPaneDistance, pixelSize, scene.cameraPosition)) {
+    for (const {displayX, displayY, ray} of primeRaysGen(width, height, scene)) {
         let samples = [];
         const sample_count = 1;
         for (let n = 0; n < sample_count; n += 1) {
@@ -130,15 +148,17 @@ function getScene(name) {
         case 'test':
             return {
                 objects: [
-                    new Sphere(new Point(0, 0, 0), 10, new Color(0.1, 0.1, 0.1)),
+                    new CheckerBoard(new Point(0, 0, 0), new Normal(0, 1, 0), new Color(1, 1, 1)),
+                    new Sphere(new Point(0, 30, 0), 50, new Color(0.1, 0.1, 0.1)),
                 ],
                 lights: [
                     new Light(new Point(300, 0, 0), new Color(0, 0, 1)),
                 ],
                 backgroundColor: new Color(0.1, 0.1, 0.13),
-                cameraPosition: new Point(0, 0, 50),
-                viewPaneDistance: 40,
-                horizonDistance: Infinity,
+                cameraPosition: new Point(0, 30, 200),
+                cameraAngle: 45 * (Math.PI / 180),
+                viewPaneDistance: 300,
+                horizonDistance: 800,
             };
             break;
         default:
@@ -156,7 +176,7 @@ function getScene(name) {
                         new Point(x, y + 35, 15),
                         i,
                         new Color(
-                            Math.cos(Math.PI * i * 0.08) * 0.8 + 0.2,
+                            Math.cos(Math.PI * i * 0.08) * 0.4 + 0.2,
                             0.1,
                             0.1
                         )
@@ -165,18 +185,19 @@ function getScene(name) {
             }
 
             scene.push(
-                new CheckerBoard(new Point(0, 0, 0), new Normal(0, 1, 0), new Color(1, 1, 1))
+               new CheckerBoard(new Point(0, 0, 0), new Normal(0, 1, 0), new Color(1, 1, 1))
             );
 
             let lights = [
-                new Light(new Point(300, 50, 0), new Color(0, 0, 1)),
+                new Light(new Point(300, 100, 100), new Color(0, 0, 1)),
             ];
 
             return {
                 objects: scene,
                 lights: lights,
                 backgroundColor: new Color(0.1, 0.1, 0.15),
-                cameraPosition: new Point(0, 50, 400),
+                cameraPosition: new Point(0, 50, 250),
+                cameraAngle: 45 * (Math.PI / 180),
                 viewPaneDistance: 300,
                 horizonDistance: 1000,
             };
@@ -212,6 +233,8 @@ function main() {
         scene_name = 'default';
     }
 
+    const time_started = performance.now();
+
     render(getScene(scene_name), canvasWidth, canvasHeight, primeRays, function(x, y, color) {
         //console.log(`Drawing at ${x} x ${y} : ${color.r * 255}, ${color.g * 255}, ${color.b * 255}`)
         drawPixel(x, canvasHeight - y, color.r * 255, color.g * 255, color.b * 255, 255);
@@ -220,6 +243,9 @@ function main() {
         // }
     });
     updateCanvas();
+
+    const time_finished = performance.now();
+    document.getElementById('status').innerText = `Rendered in ${Math.round(time_finished - time_started)} ms`;
 }
 
 document.addEventListener("DOMContentLoaded", function(){

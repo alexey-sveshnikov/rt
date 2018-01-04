@@ -20,6 +20,10 @@ export class CheckerBoard {
         if ((Math.ceil(point.x / 10) % 2 == 0) ^ (Math.ceil(point.z / 10) % 2 == 0)) {
             return false;
         }
-        return distance;
+        return {
+            distance: distance,
+            normal: this.normal,
+            hit_point: point,
+        }
     }
 }
